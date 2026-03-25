@@ -18,6 +18,9 @@
     
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="safe-area-inset">
     <div id="app">
@@ -121,18 +124,14 @@
                 </button>
             </nav>
         </div>
+    </div>
 
     <!-- Scripts -->
     <script src="app.js"></script>
     <script>
-        // Registrando Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js').then(registration => {
-                    console.log('SW registrado com sucesso:', registration.scope);
-                }, err => {
-                    console.log('Falha no registro do SW:', err);
-                });
+                navigator.serviceWorker.register('/service-worker.js');
             });
         }
     </script>
