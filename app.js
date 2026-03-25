@@ -1,7 +1,13 @@
 const supabaseUrl = 'https://vsxiobbqobavnsagcwla.supabase.co';
 const supabaseKey = 'sb_publishable_ubzFewgOlGaa5bZDCVq8_w_5i68YS51';
-// A biblioteca do Supabase via CDN expõe window.supabase
-const supabase = (typeof window.supabase !== 'undefined') ? window.supabase.createClient(supabaseUrl, supabaseKey) : null;
+
+// Função para obter o cliente de forma segura
+function getSupabase() {
+    if (typeof window.supabase !== 'undefined') {
+        return window.supabase.createClient(supabaseUrl, supabaseKey);
+    }
+    return null;
+}
 
 const App = {
     state: {
@@ -19,35 +25,37 @@ const App = {
     },
 
     async init() {
-        this.cacheDOM();
-        this.bindEvents();
-        await this.load();
-        this.checkFirstRun();
-        this.render();
-        console.log('Life OS Initialized with Cloud Sync');
+        console.log('Iniciando Life OS...');
+        try {
+            this.cacheDOM();
+            this.bindEvents();
+            
+            // Tentar carregar dados, mas não travar se falhar
+            await this.load().catch(err => console.error('Falha no carregamento inicial:', err));
+            
+            this.checkFirstRun();
+            this.render();
+            console.log('Life OS pronto.');
+        } catch (error) {
+            console.error('Erro crítico na inicialização:', error);
+            // Tentar renderizar o que for possível
+            this.render();
+        }
     },
 
     checkFirstRun() {
         if (this.state.data.tasks.length === 0 && this.state.data.finances.balance === 0) {
+            console.log('Configurando dados iniciais de demonstração...');
             this.state.data.tasks = [
-                { text: 'Finalizar design do Life OS', done: true, tag: 'Trabalho' },
-                { text: 'Comprar café premium', done: false, tag: 'Pessoal' },
-                { text: 'Treino de alta intensidade', done: false, tag: 'Saúde' }
+                { text: 'Sincronização Nuvem Ativada ☁️', done: true, tag: 'Sistema' },
+                { text: 'Explorar o novo Life OS', done: false, tag: 'Dashboard' }
             ];
             this.state.data.finances = {
-                balance: 14500.80,
+                balance: 500.00,
                 transactions: [
-                    { desc: 'Freelance Design', val: 2500, date: '24/03/2026' },
-                    { desc: 'Assinatura Adobe', val: -124, date: '23/03/2026' }
+                    { desc: 'Saldo Inicial Cloud', val: 500.00, date: new Date().toLocaleDateString('pt-BR') }
                 ]
             };
-            this.state.data.goals = [
-                { title: 'Liberdade Financeira', category: 'Finanças', progress: 65 },
-                { title: 'Maratona de SP', category: 'Saúde', progress: 40 }
-            ];
-            this.state.data.notes = [
-                { title: 'Ideias de Startup', text: 'Aplicativo de gestão de tempo baseado em estados mentais...' }
-            ];
             this.save();
         }
     },
@@ -70,9 +78,9 @@ const App = {
         this.dom.navItems.forEach(item => item.addEventListener('click', () => handleNav(item)));
         this.dom.sidebarItems.forEach(item => item.addEventListener('click', () => handleNav(item)));
 
-        this.dom.fab.addEventListener('click', () => {
-            this.handleFabAction();
-        });
+        if (this.dom.fab) {
+            this.dom.fab.addEventListener('click', () => this.handleFabAction());
+        }
 
         const openSettings = () => {
             const newName = prompt('Qual o seu nome?', this.state.userName);
@@ -83,17 +91,13 @@ const App = {
             }
         };
 
-        const setMobileHeader = () => {
-            const btnSettings = document.getElementById('btn-settings');
-            const btnSearch = document.getElementById('btn-search');
-            const btnSettingsSidebar = document.getElementById('btn-settings-sidebar');
-            
-            if (btnSettings) btnSettings.onclick = openSettings;
-            if (btnSettingsSidebar) btnSettingsSidebar.onclick = openSettings;
-            if (btnSearch) btnSearch.onclick = () => alert('Busca global em breve no Life OS.');
-        };
-        
-        setMobileHeader();
+        const btnSettings = document.getElementById('btn-settings');
+        const btnSettingsSidebar = document.getElementById('btn-settings-sidebar');
+        const btnSearch = document.getElementById('btn-search');
+
+        if (btnSettings) btnSettings.onclick = openSettings;
+        if (btnSettingsSidebar) btnSettingsSidebar.onclick = openSettings;
+        if (btnSearch) btnSearch.onclick = () => alert('Busca funcional em breve.');
     },
 
     switchModule(moduleName) {
@@ -101,6 +105,7 @@ const App = {
         this.state.currentModule = moduleName;
         this.dom.navItems.forEach(item => item.classList.toggle('active', item.getAttribute('data-module') === moduleName));
         this.dom.sidebarItems.forEach(item => item.classList.toggle('active', item.getAttribute('data-module') === moduleName));
+        
         this.dom.mainContent.style.opacity = '0';
         setTimeout(() => {
             this.render();
@@ -109,18 +114,28 @@ const App = {
     },
 
     async load() {
-        if (supabase) {
-            const { data, error } = await supabase.from('os_state').select('data').eq('id', 1).single();
-            if (data && data.data && Object.keys(data.data).length > 0) {
+        const client = getSupabase();
+        if (client) {
+            console.log('Buscando dados na nuvem...');
+            const { data, error } = await client.from('os_state').select('data').eq('id', 1).single();
+            
+            if (error) {
+                console.warn('Erro ao buscar na nuvem, usando local:', error.message);
+                this.loadLocal();
+                return;
+            }
+
+            if (data && data.data) {
                 const s = data.data;
                 this.state.data = s.data || this.state.data;
                 this.state.userName = s.userName || this.state.userName;
                 this.state.hideBalance = s.hideBalance || false;
-                console.log('Dados carregados da Nuvem');
+                console.log('Dados sincronizados da nuvem com sucesso.');
             } else {
                 this.loadLocal();
             }
         } else {
+            console.warn('Supabase não detectado, usando LocalStorage.');
             this.loadLocal();
         }
     },
@@ -128,10 +143,14 @@ const App = {
     loadLocal() {
         const localData = localStorage.getItem('lifeos_cloud_backup');
         if (localData) {
-            const parsed = JSON.parse(localData);
-            this.state.data = parsed.data || this.state.data;
-            this.state.userName = parsed.userName || this.state.userName;
-            this.state.hideBalance = parsed.hideBalance || false;
+            try {
+                const parsed = JSON.parse(localData);
+                this.state.data = parsed.data || this.state.data;
+                this.state.userName = parsed.userName || this.state.userName;
+                this.state.hideBalance = parsed.hideBalance || false;
+            } catch (e) {
+                console.error('Erro ao ler LocalStorage:', e);
+            }
         }
     },
 
@@ -141,10 +160,15 @@ const App = {
             hideBalance: this.state.hideBalance,
             data: this.state.data
         };
+        
+        // Backup Local imediato
         localStorage.setItem('lifeos_cloud_backup', JSON.stringify(payload));
-        if (supabase) {
-            await supabase.from('os_state').upsert({ id: 1, data: payload, updated_at: new Date() });
-            console.log('Nuvem Sincronizada');
+        
+        const client = getSupabase();
+        if (client) {
+            const { error } = await client.from('os_state').upsert({ id: 1, data: payload, updated_at: new Date() });
+            if (error) console.error('Erro de push nuvem:', error.message);
+            else console.log('Nuvem atualizada.');
         }
     },
 
@@ -155,13 +179,19 @@ const App = {
     },
 
     render() {
+        if (!this.dom.mainContent) return;
+        
         const module = this.state.currentModule;
         this.dom.mainContent.innerHTML = '';
-        if (['tasks', 'finances', 'notes', 'goals'].includes(module)) {
-            this.dom.fab.classList.remove('hidden');
-        } else {
-            this.dom.fab.classList.add('hidden');
+        
+        if (this.dom.fab) {
+            if (['tasks', 'finances', 'notes', 'goals'].includes(module)) {
+                this.dom.fab.classList.remove('hidden');
+            } else {
+                this.dom.fab.classList.add('hidden');
+            }
         }
+
         switch (module) {
             case 'dashboard': this.renderDashboard(); break;
             case 'tasks': this.renderTasks(); break;
@@ -207,7 +237,7 @@ const App = {
                     </div>
                     <div class="card" onclick="App.switchModule('time')" style="background: linear-gradient(135deg, var(--primary-container) 0%, #2D0050 100%); cursor: pointer; text-align: center;">
                         <p class="label-md" style="color: var(--primary);">Foco / Pomodoro</p>
-                        <span style="font-size: 2.5rem; font-weight: 800; font-family: 'Manrope'; color:white;">25:00</span>
+                        <span style="font-size: 2.5rem; font-weight: 800; color:white;">25:00</span>
                     </div>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
@@ -220,7 +250,7 @@ const App = {
                             <div onclick="App.toggleTask(${i})" style="width: 20px; height: 20px; border: 2px solid var(--primary); border-radius: 50%; background: ${task.done ? 'var(--primary)' : 'transparent'};"></div>
                             <span style="text-decoration: ${task.done ? 'line-through' : 'none'}; color: ${task.done ? 'var(--text-hint)' : 'var(--text-primary)'}">${task.text}</span>
                         </div>
-                    `).join('')}
+                    `).join('') || '<p style="color:var(--text-hint); padding: 1rem;">Nenhuma tarefa pendente.</p>'}
                 </div>
             </div>
         `;
@@ -241,11 +271,14 @@ const App = {
                 <h1 class="display-lg">Tarefas</h1>
                 <div class="task-list">
                     ${tasks.map((task, index) => `
-                        <div class="card" style="display: flex; align-items: center; gap: 1rem;">
-                            <input type="checkbox" ${task.done ? 'checked' : ''} onclick="App.toggleTask(${index})">
-                            <span style="text-decoration: ${task.done ? 'line-through' : 'none'};">${task.text}</span>
+                        <div class="card" style="display: flex; align-items: center; gap: 1rem; padding: 1rem;">
+                            <div onclick="App.toggleTask(${index})" style="width: 20px; height: 20px; border: 2px solid var(--primary); border-radius: 50%; background: ${task.done ? 'var(--primary)' : 'transparent'};"></div>
+                            <span style="text-decoration: ${task.done ? 'line-through' : 'none'}; flex:1;">${task.text}</span>
+                            <button onclick="App.removeTask(${index})" style="background:none; border:none; color:#FF5252;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
                         </div>
-                    `).join('') || '<p>Nenhuma tarefa no horizonte.</p>'}
+                    `).join('') || '<p style="text-align:center; padding: 2rem;">Nada por aqui.</p>'}
                 </div>
             </div>
         `;
@@ -262,13 +295,21 @@ const App = {
                     <p class="label-md">Patrimônio Total</p>
                     <h2 style="font-size: 2.25rem;">${balanceDisplay}</h2>
                 </div>
-                <h3 style="margin-top: 2rem;">Histórico</h3>
+                <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Histórico</h3>
                 ${f.transactions.map((t, index) => `
                     <div style="display: flex; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <span>${t.desc}</span>
-                        <span style="color: ${t.val < 0 ? '#FF5252' : '#4CAF50'}">${t.val < 0 ? '-' : '+'} R$ ${Math.abs(t.val).toFixed(2)}</span>
+                        <div>
+                            <p style="font-weight: 500;">${t.desc}</p>
+                            <p class="label-md" style="font-size: 0.6rem;">${t.date}</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <span style="font-weight: 600; color: ${t.val < 0 ? '#FF5252' : '#4CAF50'}">${t.val < 0 ? '-' : '+'} R$ ${Math.abs(t.val).toFixed(2)}</span>
+                            <button onclick="App.removeTransaction(${index})" style="background:none; border:none; color:#FF5252;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
                     </div>
-                `).join('')}
+                `).join('') || '<p style="text-align:center; padding: 2rem;">Sem transações.</p>'}
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
@@ -279,13 +320,18 @@ const App = {
         const html = `
             <div class="animate-fade-in">
                 <h1 class="display-lg">Notas</h1>
-                <div style="column-count: 2;">
+                <div style="column-count: 2; column-gap: 1rem;">
                     ${notes.map((note, index) => `
-                        <div class="card" onclick="App.openNote(${index})">
-                            <h3>${note.title}</h3>
-                            <p>${note.text}</p>
+                        <div class="card" onclick="App.openNote(${index})" style="break-inside: avoid; margin-bottom: 1rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <h3 style="font-size: 1rem;">${note.title}</h3>
+                                <button onclick="event.stopPropagation(); App.removeNote(${index})" style="background:none; border:none; color:#FF5252;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px;">${note.text}</p>
                         </div>
-                    `).join('')}
+                    `).join('') || '<p style="text-align:center; padding: 2rem; column-span:all;">Vazio por aqui.</p>'}
                 </div>
             </div>
         `;
@@ -308,12 +354,17 @@ const App = {
                 <h1 class="display-lg">Metas</h1>
                 ${goals.map((goal, i) => `
                     <div class="card">
-                        <h3>${goal.title}</h3>
-                        <div style="height: 6px; width:100%; background:var(--surface-high); margin-top:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <h3 onclick="App.updateGoalProgress(${i})" style="cursor:pointer;">${goal.title}</h3>
+                            <button onclick="App.removeGoal(${i})" style="background:none; border:none; color:#FF5252;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                        <div style="height: 6px; width:100%; background:var(--surface-high); margin-top:10px; border-radius:3px; overflow:hidden;">
                             <div style="height:100%; width:${goal.progress}%; background:var(--primary);"></div>
                         </div>
                     </div>
-                `).join('')}
+                `).join('') || '<p style="text-align:center; padding: 2rem;">Trace suas metas.</p>'}
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
@@ -324,7 +375,16 @@ const App = {
         const html = `
             <div class="animate-fade-in">
                 <h1 class="display-lg">Ideias</h1>
-                ${ideas.map(idea => `<div class="card">${idea.text}</div>`).join('')}
+                ${ideas.map((idea, i) => `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between;">
+                            <p>${idea.text}</p>
+                            <button onclick="App.removeIdea(${i})" style="background:none; border:none; color:#FF5252;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join('') || '<p style="text-align:center; padding: 2rem;">Insights aparecerão aqui.</p>'}
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
@@ -335,7 +395,7 @@ const App = {
             <div class="animate-fade-in">
                 <h1 class="display-lg">Tempo</h1>
                 <div class="card card-elevated" style="text-align: center; padding: 3rem 1rem;">
-                    <div style="font-size: 4rem; font-weight: 800; font-family: 'Manrope'; margin: 1.5rem 0;">25:00</div>
+                    <div style="font-size: 4rem; font-weight: 800; margin: 1.5rem 0;">25:00</div>
                     <button class="fab" style="position: static;" onclick="alert('Foco iniciado')">Iniciar</button>
                 </div>
             </div>
@@ -358,8 +418,11 @@ const App = {
             }
         } else if (module === 'notes') {
             const title = prompt('Título:');
-            const text = prompt('Texto:');
+            const text = prompt('Conteúdo:');
             if (title) { this.state.data.notes.unshift({ title, text }); this.save(); this.render(); }
+        } else if (module === 'goals') {
+            const title = prompt('Meta:');
+            if (title) { this.state.data.goals.unshift({ title, progress: 0 }); this.save(); this.render(); }
         }
     },
 
@@ -367,7 +430,15 @@ const App = {
         this.state.data.tasks[index].done = !this.state.data.tasks[index].done;
         this.save();
         this.render();
-    }
+    },
+
+    removeTask(i) { if(confirm('Remover?')){ this.state.data.tasks.splice(i,1); this.save(); this.render(); } },
+    removeTransaction(i) { if(confirm('Remover?')){ const t=this.state.data.finances.transactions[i]; this.state.data.finances.balance-=t.val; this.state.data.finances.transactions.splice(i,1); this.save(); this.render(); } },
+    removeNote(i) { if(confirm('Remover?')){ this.state.data.notes.splice(i,1); this.save(); this.render(); } },
+    removeGoal(i) { if(confirm('Remover?')){ this.state.data.goals.splice(i,1); this.save(); this.render(); } },
+    removeIdea(i) { if(confirm('Remover?')){ this.state.data.ideas.splice(i,1); this.save(); this.render(); } },
+    updateGoalProgress(i) { const p = prompt('Progresso %', this.state.data.goals[i].progress); if(p!==null){ this.state.data.goals[i].progress = Math.min(100, Math.max(0, parseInt(p))); this.save(); this.render(); } }
 };
 
+// Auto-inicializar
 window.addEventListener('DOMContentLoaded', () => App.init());
