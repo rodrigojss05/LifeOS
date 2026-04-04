@@ -24,7 +24,8 @@ const App = {
             finances: { 
                 balance: 0, 
                 transactions: [],
-                savingsGoals: [] 
+                savingsGoals: [],
+                categories: ['Alimentação', 'Transporte', 'Assinaturas', 'Lazer', 'Saúde']
             },
             tasks: [],
             notes: [],
@@ -38,6 +39,16 @@ const App = {
         const id = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
         localStorage.setItem('lifeos_user_id', id);
         return id;
+    },
+
+    async setSyncCode(code) {
+        if (!code) return;
+        this.state.userId = 'shared_' + code.trim();
+        localStorage.setItem('lifeos_user_id', this.state.userId);
+        this.state.isLoaded = false; // Forçar recarregamento
+        await this.load();
+        this.render();
+        this.ui.alert('Dispositivo Sincronizado!');
     },
 
     async init() {
@@ -510,6 +521,10 @@ const App = {
                     <div class="stat-card">
                         <p class="label-md">Patrimônio Total</p>
                         <div class="stat-value">${balanceDisplay}</div>
+                        <p style="font-size: 0.65rem; color: var(--text-hint); margin-top: 10px;">
+                            <b>Safe-to-Spend:</b> R$ ${safeDisplay} <br>
+                            (Reserva de segurança de 40% para imprevistos)
+                        </p>
                     </div>
                     <div class="stat-card" style="border-left: 4px solid #34d399;">
                         <p class="label-md" style="color: #34d399;">Entradas (Mês)</p>
@@ -761,6 +776,7 @@ const App = {
 
     async handleFabAction() {
         const module = this.state.currentModule;
+        
         if (module === 'tasks') {
             const res = await this.ui.showModal({
                 title: 'Nova Tarefa Detalhada',
@@ -799,43 +815,63 @@ const App = {
             });
 
             if (res && res.text) {
-                this.state.data.tasks.unshift({ ...res, done: false });
+                this.state.data.tasks.unshift({ ...res, done: false, createdAt: new Date().toISOString() });
                 await this.save(); 
                 this.render();
             }
         } else if (module === 'finances') {
+            const categories = this.state.data.finances.categories || ['Alimentação', 'Transporte', 'Assinaturas', 'Lazer', 'Saúde'];
             const res = await this.ui.showModal({
                 title: 'Nova Transação',
                 body: `
                     <div class="input-group">
-                        <label class="input-label">O que foi?</label>
-                        <input type="text" id="fin-desc" placeholder="Ex: Mercado">
+                        <label class="input-label">Descrição</label>
+                        <input type="text" id="fin-desc" placeholder="Ex: Aluguel">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <div class="input-group">
-                            <label class="input-label">Valor (Positivo ou Negativo)</label>
-                            <input type="number" id="fin-val" step="0.01" placeholder="0.00">
+                            <label class="input-label">Valor (R$)</label>
+                            <input type="number" id="fin-val" step="0.01" placeholder="0,00" inputmode="decimal">
                         </div>
                         <div class="input-group">
-                            <label class="input-label">Categoria</label>
-                            <select id="fin-cat">
-                                <option value="Other">Outros</option>
-                                <option value="Food">Alimentação</option>
-                                <option value="Transport">Transporte</option>
-                                <option value="Subs">Assinaturas</option>
-                                <option value="Leisure">Lazer</option>
-                                <option value="Health">Saúde</option>
+                            <label class="input-label">Tipo</label>
+                            <select id="fin-type" style="border-color: var(--primary);">
+                                <option value="expense">Saída (-) </option>
+                                <option value="income">Entrada (+) </option>
                             </select>
                         </div>
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Categoria</label>
+                        <select id="fin-cat">
+                            ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+                            <option value="NEW">+ Nova Categoria</option>
+                        </select>
                     </div>
                 `,
                 actions: [
                     { text: 'Cancelar', resolve: null },
-                    { text: 'Salvar', primary: true, resolve: () => {
+                    { text: 'Confirmar', primary: true, resolve: async () => {
+                        const desc = document.getElementById('fin-desc').value;
+                        const rawVal = parseFloat(document.getElementById('fin-val').value);
+                        const type = document.getElementById('fin-type').value;
+                        let cat = document.getElementById('fin-cat').value;
+                        
+                        if (cat === 'NEW') {
+                            const newCat = prompt('Nome da nova categoria:');
+                            if (newCat) {
+                                if(!this.state.data.finances.categories) this.state.data.finances.categories = categories;
+                                this.state.data.finances.categories.push(newCat);
+                                cat = newCat;
+                            } else {
+                                return null;
+                            }
+                        }
+
                         return {
-                            desc: document.getElementById('fin-desc').value,
-                            val: parseFloat(document.getElementById('fin-val').value),
-                            category: document.getElementById('fin-cat').value
+                            desc,
+                            val: type === 'expense' ? -Math.abs(rawVal) : Math.abs(rawVal),
+                            category: cat
                         };
                     }}
                 ]
