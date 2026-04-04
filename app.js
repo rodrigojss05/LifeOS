@@ -11,7 +11,9 @@ function getSupabase() {
 
 const App = {
     state: {
+        version: '1.0.3',
         userId: null,
+// ...
         currentModule: 'dashboard',
         userName: 'Rodrigo',
         hideBalance: false,
@@ -223,12 +225,16 @@ const App = {
 
                 if (data && data.data) {
                     const s = data.data;
-                    // Só sobrescreve se os dados da nuvem forem válidos
-                    if (s.data) {
+                    // SÓ SOBRESCREVE SE A NUVEM TIVER DADOS REAIS
+                    const cloudHasData = s.data && (s.data.tasks.length > 0 || s.data.finances.transactions.length > 0);
+                    
+                    if (cloudHasData) {
                         this.state.data = s.data;
                         this.state.userName = s.userName || this.state.userName;
                         this.state.hideBalance = s.hideBalance || false;
-                        console.log('Dados da nuvem carregados.');
+                        console.log('Dados sincronizados da nuvem.');
+                    } else {
+                        console.log('Nuvem vazia, mantendo dados locais.');
                     }
                 }
                 this.updateSyncStatus('online');
