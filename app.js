@@ -11,16 +11,21 @@ function getSupabase() {
 
 const App = {
     state: {
-        version: '1.0.3',
+        version: '1.0.4',
         userId: null,
-// ...
         currentModule: 'dashboard',
         userName: 'Rodrigo',
         hideBalance: false,
         syncStatus: 'offline', 
         isLoaded: false,
+        financeView: 'list', // 'list' or 'table'
+        financePeriod: new Date().toISOString().substring(0, 7), // YYYY-MM
         data: {
-            finances: { balance: 0, transactions: [] },
+            finances: { 
+                balance: 0, 
+                transactions: [],
+                savingsGoals: [] 
+            },
             tasks: [],
             notes: [],
             goals: [],
@@ -451,11 +456,30 @@ const App = {
         }
     },
 
+    setFinanceView(view) {
+        this.state.financeView = view;
+        this.render();
+    },
+
+    setFinancePeriod(period) {
+        this.state.financePeriod = period;
+        this.render();
+    },
+
     renderFinances() {
         const f = this.state.data.finances;
-        const balanceDisplay = this.state.hideBalance ? '••••' : `R$ ${f.balance.toLocaleString('pt-BR')}`;
+        const currentPeriod = this.state.financePeriod;
         
-        // Simulação Safe-to-Spend: Saldo - 40% (reserva)
+        // Filtrar transações por período
+        const filteredTransactions = f.transactions.filter(t => {
+            const tDate = t.date.split('/').reverse().join('-'); // Converter DD/MM/YYYY para YYYY-MM-DD
+            return tDate.startsWith(currentPeriod);
+        });
+
+        const totalIncome = filteredTransactions.filter(t => t.val > 0).reduce((acc, t) => acc + t.val, 0);
+        const totalExpense = Math.abs(filteredTransactions.filter(t => t.val < 0).reduce((acc, t) => acc + t.val, 0));
+        
+        const balanceDisplay = this.state.hideBalance ? '••••' : `R$ ${f.balance.toLocaleString('pt-BR')}`;
         const safeToSpend = f.balance * 0.6;
         const safeDisplay = this.state.hideBalance ? '••••' : `R$ ${safeToSpend.toLocaleString('pt-BR')}`;
 
@@ -470,50 +494,180 @@ const App = {
 
         const html = `
             <div class="animate-fade-in">
-                <h1 class="display-lg">Finanças</h1>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h1 class="display-lg" style="margin: 0;">Finanças</h1>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <input type="month" value="${currentPeriod}" onchange="App.setFinancePeriod(this.value)" 
+                               style="width: auto; padding: 6px 12px; font-size: 0.8rem; background: var(--surface-container);">
+                        <div class="view-toggle">
+                            <button class="toggle-btn ${this.state.financeView === 'list' ? 'active' : ''}" onclick="App.setFinanceView('list')">Lista</button>
+                            <button class="toggle-btn ${this.state.financeView === 'table' ? 'active' : ''}" onclick="App.setFinanceView('table')">Tabela</button>
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="finance-summary">
                     <div class="stat-card">
                         <p class="label-md">Patrimônio Total</p>
                         <div class="stat-value">${balanceDisplay}</div>
                     </div>
-                    <div class="stat-card" style="border-left: 4px solid var(--primary);">
-                        <p class="label-md" style="color: var(--primary);">Disponível (Safe-to-Spend)</p>
-                        <div class="stat-value">${safeDisplay}</div>
+                    <div class="stat-card" style="border-left: 4px solid #34d399;">
+                        <p class="label-md" style="color: #34d399;">Entradas (Mês)</p>
+                        <div class="stat-value" style="color: #34d399;">R$ ${totalIncome.toLocaleString('pt-BR')}</div>
+                    </div>
+                    <div class="stat-card" style="border-left: 4px solid #f87171;">
+                        <p class="label-md" style="color: #f87171;">Saídas (Mês)</p>
+                        <div class="stat-value" style="color: #f87171;">R$ ${totalExpense.toLocaleString('pt-BR')}</div>
                     </div>
                 </div>
 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h3 style="font-size: 1.25rem;">Transações Recentes</h3>
-                    <button class="btn btn-ghost" style="font-size: 0.8rem;" onclick="App.ui.alert('Exportação em breve')">Exportar PDF</button>
+                <div class="chart-card">
+                    <canvas id="financeChart"></canvas>
                 </div>
 
-                <div class="transaction-list">
-                    ${f.transactions.map((t, index) => {
-                        const cat = categoryMap[t.category] || categoryMap['Other'];
-                        return `
-                        <div class="transaction-item">
-                            <div class="transaction-info">
-                                <div class="category-icon ${cat.class}">${cat.icon}</div>
-                                <div>
-                                    <p style="font-weight: 600; font-size: 0.95rem;">${t.desc}</p>
-                                    <p class="label-md" style="font-size: 0.65rem;">${t.date} • ${t.category || 'Outros'}</p>
-                                </div>
-                            </div>
-                            <div style="text-align: right; display: flex; align-items: center; gap: 1rem;">
-                                <div style="font-weight: 700; color: ${t.val < 0 ? '#f87171' : '#34d399'}; font-size: 1rem;">
-                                    ${t.val < 0 ? '-' : '+'} R$ ${Math.abs(t.val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                </div>
-                                <button onclick="App.removeTransaction(${index})" style="background:none; border:none; color:var(--text-hint); cursor: pointer; padding: 4px;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                </button>
-                            </div>
+                <div class="card-grid-2">
+                    <div class="card card-elevated" style="margin-bottom: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                            <h3>Metas de Economia</h3>
+                            <button class="btn btn-ghost" style="padding: 5px;" onclick="App.addSavingsGoal()">+</button>
                         </div>
-                    `}).join('') || '<div style="text-align:center; padding: 4rem; background: var(--surface-low); border-radius: var(--radius-xl); color: var(--text-hint);">Nenhuma movimentação registrada.</div>'}
+                        ${(f.savingsGoals || []).map((g, i) => `
+                            <div style="margin-bottom: 1.25rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="font-size: 0.85rem; font-weight: 600;">${g.title}</span>
+                                    <span style="font-size: 0.85rem; color: var(--text-hint);">R$ ${g.current.toLocaleString('pt-BR')} / ${g.target.toLocaleString('pt-BR')}</span>
+                                </div>
+                                <div style="height: 8px; background: var(--surface-high); border-radius: 4px; overflow: hidden; position: relative; cursor: pointer;" onclick="App.updateSavingsGoal(${i})">
+                                    <div style="height: 100%; width: ${Math.min(100, (g.current/g.target)*100)}%; background: var(--primary); transition: width 0.5s;"></div>
+                                </div>
+                            </div>
+                        `).join('') || '<p style="color: var(--text-hint); font-size: 0.8rem;">Nenhuma meta definida.</p>'}
+                    </div>
+
+                    <div style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3>Transações de ${currentPeriod}</h3>
+                        </div>
+                        
+                        ${this.state.financeView === 'list' ? `
+                            <div class="transaction-list">
+                                ${filteredTransactions.map((t, index) => {
+                                    const cat = categoryMap[t.category] || categoryMap['Other'];
+                                    return `
+                                    <div class="transaction-item">
+                                        <div class="transaction-info">
+                                            <div class="category-icon ${cat.class}">${cat.icon}</div>
+                                            <div>
+                                                <p style="font-weight: 600; font-size: 0.9rem;">${t.desc}</p>
+                                                <p class="label-md" style="font-size: 0.6rem;">${t.date}</p>
+                                            </div>
+                                        </div>
+                                        <div style="text-align: right; display: flex; align-items: center; gap: 0.75rem;">
+                                            <div style="font-weight: 700; color: ${t.val < 0 ? '#f87171' : '#34d399'}; font-size: 0.9rem;">
+                                                ${t.val < 0 ? '-' : '+'} R$ ${Math.abs(t.val).toLocaleString('pt-BR')}
+                                            </div>
+                                            <button onclick="App.removeTransaction(${index})" style="background:none; border:none; color:var(--text-hint); cursor: pointer;">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `}).join('') || '<p style="text-align:center; padding: 2rem; color: var(--text-hint);">Sem dados para este mês.</p>'}
+                            </div>
+                        ` : `
+                            <div class="card" style="padding: 0; overflow-x: auto;">
+                                <table class="finance-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Descrição</th>
+                                            <th>Categoria</th>
+                                            <th style="text-align: right;">Valor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${filteredTransactions.map(t => `
+                                            <tr>
+                                                <td>${t.date}</td>
+                                                <td style="font-weight: 600;">${t.desc}</td>
+                                                <td>${t.category || 'Other'}</td>
+                                                <td style="text-align: right; color: ${t.val < 0 ? '#f87171' : '#34d399'}; font-weight: 700;">
+                                                    R$ ${t.val.toLocaleString('pt-BR')}
+                                                </td>
+                                            </tr>
+                                        `).join('') || '<tr><td colspan="4" style="text-align:center; padding: 2rem;">Vazio.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
+                    </div>
                 </div>
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
+        setTimeout(() => this.initFinanceChart(filteredTransactions), 100);
+    },
+
+    initFinanceChart(transactions) {
+        const ctx = document.getElementById('financeChart');
+        if (!ctx) return;
+
+        // Agrupar por categorias
+        const catTotals = {};
+        transactions.filter(t => t.val < 0).forEach(t => {
+            const cat = t.category || 'Other';
+            catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.val);
+        });
+
+        const labels = Object.keys(catTotals);
+        const data = Object.values(catTotals);
+        
+        if (this.chart) this.chart.destroy();
+        
+        this.chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Gastos por Categoria (R$)',
+                    data: data,
+                    backgroundColor: 'rgba(223, 183, 255, 0.6)',
+                    borderColor: '#DFB7FF',
+                    borderWidth: 1,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, border: { display: false } },
+                    x: { grid: { display: false }, border: { display: false } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    },
+
+    async addSavingsGoal() {
+        const title = await this.ui.prompt('Nome da meta (Ex: Viagem)');
+        const target = parseFloat(await this.ui.prompt('Valor total (R$)'));
+        if (title && !isNaN(target)) {
+            if (!this.state.data.finances.savingsGoals) this.state.data.finances.savingsGoals = [];
+            this.state.data.finances.savingsGoals.push({ title, target, current: 0 });
+            await this.save();
+            this.render();
+        }
+    },
+
+    async updateSavingsGoal(i) {
+        const val = parseFloat(await this.ui.prompt('Adicionar valor à meta (R$)', '0'));
+        if (!isNaN(val)) {
+            this.state.data.finances.savingsGoals[i].current += val;
+            await this.save();
+            this.render();
+        }
     },
 
     renderNotes() {

@@ -516,9 +516,10 @@ input:focus, textarea:focus, select:focus {
     }
 
     #main-content {
-        padding: 3rem 5%;
-        max-width: 1400px;
-        margin: 0 auto;
+        padding: 2.5rem 4rem;
+        width: 100%;
+        max-width: none;
+        margin: 0;
         overflow-y: auto;
     }
 
@@ -595,6 +596,59 @@ input:focus, textarea:focus, select:focus {
 .cat-leisure { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
 .cat-health { background: rgba(16, 185, 129, 0.1); color: #34d399; }
 .cat-other { background: rgba(152, 141, 158, 0.1); color: #988D9E; }
+
+/* --- Advanced Finance Views --- */
+.chart-card {
+    background: var(--surface-low);
+    padding: 1.5rem;
+    border-radius: var(--radius-xl);
+    height: 300px;
+    margin-bottom: 2rem;
+}
+
+.finance-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.finance-table th {
+    text-align: left;
+    color: var(--text-hint);
+    font-size: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.finance-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    font-size: 0.9rem;
+}
+
+.view-toggle {
+    display: flex;
+    background: var(--surface-container);
+    padding: 4px;
+    border-radius: 10px;
+    gap: 4px;
+}
+
+.toggle-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-hint);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.toggle-btn.active {
+    background: var(--surface-high);
+    color: var(--primary);
+}
 
 /* --- Sync Indicator (Global) --- */
 .sync-container {
