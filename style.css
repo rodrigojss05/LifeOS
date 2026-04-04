@@ -533,6 +533,43 @@ input:focus, textarea:focus, select:focus {
         gap: 2rem;
     }
 
+    /* --- Sync Indicator --- */
+    .sync-container {
+        position: fixed;
+        top: 1.5rem;
+        right: 1.5rem;
+        z-index: 2100;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--surface-low);
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-hint);
+    }
+
+    .sync-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #988D9E;
+    }
+
+    .sync-dot.online { background: #4CAF50; box-shadow: 0 0 8px rgba(76, 175, 80, 0.4); }
+    .sync-dot.syncing { background: var(--primary); animation: pulse 1s infinite; }
+    .sync-dot.error { background: #FF5252; }
+    .sync-dot.offline { background: #988D9E; }
+
+    @keyframes pulse {
+        0% { opacity: 0.5; transform: scale(0.8); }
+        50% { opacity: 1; transform: scale(1.1); }
+        100% { opacity: 0.5; transform: scale(0.8); }
+    }
+
     .display-lg {
         font-size: 3.5rem;
     }

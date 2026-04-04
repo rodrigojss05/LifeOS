@@ -15,6 +15,8 @@ const App = {
         currentModule: 'dashboard',
         userName: 'Rodrigo',
         hideBalance: false,
+        syncStatus: 'offline', 
+        isLoaded: false,
         data: {
             finances: { balance: 0, transactions: [] },
             tasks: [],
@@ -52,8 +54,15 @@ const App = {
     },
 
     checkFirstRun() {
-        if (this.state.data.tasks.length === 0 && this.state.data.finances.balance === 0) {
+        if (!this.state.isLoaded) return; // Só roda após tentar carregar tudo
+        
+        const hasData = this.state.data.tasks.length > 0 || 
+                        this.state.data.finances.transactions.length > 0 ||
+                        this.state.data.notes.length > 0;
+
+        if (!hasData) {
             console.log('Configurando dados iniciais de demonstração...');
+            // ... demo data ...
             this.state.data.tasks = [
                 { text: 'Sincronização Nuvem Ativada ☁️', done: true, tag: 'Sistema' },
                 { text: 'Explorar o novo Life OS', done: false, tag: 'Dashboard' }
@@ -191,31 +200,46 @@ const App = {
     },
 
     async load() {
+        this.updateSyncStatus('syncing');
         const client = getSupabase();
-        if (client) {
-            console.log('Sincronizando com a nuvem (ID:', this.state.userId, ')...');
-            const { data, error } = await client.from('os_state').select('data').eq('user_id', this.state.userId).single();
-            
-            if (error && error.code !== 'PGRST116') { // PGRST116 é "não encontrado"
-                console.warn('Erro na nuvem, usando local:', error.message);
-                this.loadLocal();
-                return;
-            }
+        
+        // Tentar carregar local primeiro para rapidez
+        this.loadLocal();
 
-            if (data && data.data) {
-                const s = data.data;
-                this.state.data = s.data || this.state.data;
-                this.state.userName = s.userName || this.state.userName;
-                this.state.hideBalance = s.hideBalance || false;
-                console.log('Dados sincronizados com sucesso.');
-            } else {
-                console.log('Primeiro acesso na nuvem para este ID.');
-                this.loadLocal();
+        if (client) {
+            console.log('Sincronizando nuvem (ID:', this.state.userId, ')');
+            try {
+                const { data, error } = await client.from('os_state').select('data').eq('user_id', this.state.userId).single();
+                
+                if (error) {
+                    if (error.code === 'PGRST116') {
+                        console.log('Nenhum dado na nuvem para este usuário.');
+                        this.updateSyncStatus('online');
+                        this.state.isLoaded = true;
+                        return;
+                    }
+                    throw error;
+                }
+
+                if (data && data.data) {
+                    const s = data.data;
+                    // Só sobrescreve se os dados da nuvem forem válidos
+                    if (s.data) {
+                        this.state.data = s.data;
+                        this.state.userName = s.userName || this.state.userName;
+                        this.state.hideBalance = s.hideBalance || false;
+                        console.log('Dados da nuvem carregados.');
+                    }
+                }
+                this.updateSyncStatus('online');
+            } catch (err) {
+                console.error('Erro ao carregar nuvem:', err.message);
+                this.updateSyncStatus('error');
             }
         } else {
-            console.warn('Supabase Offline, usando LocalStorage.');
-            this.loadLocal();
+            this.updateSyncStatus('offline');
         }
+        this.state.isLoaded = true;
     },
 
     loadLocal() {
@@ -233,26 +257,43 @@ const App = {
     },
 
     async save() {
+        this.updateSyncStatus('syncing');
         const payload = {
             userName: this.state.userName,
             hideBalance: this.state.hideBalance,
             data: this.state.data
         };
         
-        // Backup Local imediato
         localStorage.setItem('lifeos_cloud_backup', JSON.stringify(payload));
         
         const client = getSupabase();
         if (client) {
-            // Usamos user_id como identificador único
-            const { error } = await client.from('os_state').upsert({ 
-                user_id: this.state.userId, 
-                data: payload, 
-                updated_at: new Date() 
-            }, { onConflict: 'user_id' });
-            
-            if (error) console.error('Erro de sincronização nuvem:', error.message);
-            else console.log('Nuvem atualizada (', this.state.userId, ')');
+            try {
+                // Tentamos upsert com user_id
+                const { error } = await client.from('os_state').upsert({ 
+                    user_id: this.state.userId, 
+                    data: payload, 
+                    updated_at: new Date() 
+                }, { onConflict: 'user_id' });
+                
+                if (error) throw error;
+                this.updateSyncStatus('online');
+                console.log('Nuvem atualizada.');
+            } catch (err) {
+                console.error('Falha de sync nuvem:', err.message);
+                this.updateSyncStatus('error');
+            }
+        } else {
+            this.updateSyncStatus('offline');
+        }
+    },
+
+    updateSyncStatus(status) {
+        this.state.syncStatus = status;
+        const indicator = document.getElementById('sync-indicator');
+        if (indicator) {
+            indicator.className = 'sync-dot ' + status;
+            indicator.title = 'Status: ' + status;
         }
     },
 
