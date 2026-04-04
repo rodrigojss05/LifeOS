@@ -516,29 +516,85 @@ input:focus, textarea:focus, select:focus {
     }
 
     #main-content {
-        padding: 3rem 4rem;
-        max-width: 1200px;
+        padding: 3rem 5%;
+        max-width: 1400px;
         margin: 0 auto;
         overflow-y: auto;
     }
 
     .dashboard-widget {
-        grid-template-columns: repeat(4, 1fr) !important;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
         gap: 1.5rem !important;
-    }
-
-    .card-grid-2 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
     }
 
     .task-list {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    .card-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
     }
 }
+
+/* --- Finance 2.0 Enhancements --- */
+.finance-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+}
+
+.stat-card {
+    background: var(--surface-low);
+    padding: 1.5rem;
+    border-radius: var(--radius-xl);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin-top: 0.5rem;
+}
+
+.transaction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--surface-container);
+    border-radius: var(--radius-lg);
+    margin-bottom: 0.75rem;
+    transition: var(--transition-smooth);
+}
+
+.transaction-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.category-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.cat-food { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+.cat-transport { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+.cat-subs { background: rgba(167, 139, 250, 0.1); color: #a78bfa; }
+.cat-leisure { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+.cat-health { background: rgba(16, 185, 129, 0.1); color: #34d399; }
+.cat-other { background: rgba(152, 141, 158, 0.1); color: #988D9E; }
 
 /* --- Sync Indicator (Global) --- */
 .sync-container {

@@ -412,7 +412,7 @@ const App = {
                     ${tasks.map((task, index) => {
                         const tagClass = task.tag ? `tag-${task.tag.toLowerCase()}` : '';
                         return `
-                        <div class="card" style="display: flex; gap: 1rem; padding: 1.25rem;">
+                        <div class="card animate-fade-in" style="display: flex; gap: 1rem; padding: 1.25rem; margin-bottom: 0;">
                             <div onclick="App.toggleTask(${index})" style="margin-top: 4px; width: 22px; height: 22px; border: 2px solid var(--primary); border-radius: 50%; background: ${task.done ? 'var(--primary)' : 'transparent'}; flex-shrink: 0; cursor: pointer;"></div>
                             <div style="flex:1;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -427,7 +427,7 @@ const App = {
                                 </div>
                             </div>
                         </div>
-                    `}).join('') || '<p style="text-align:center; padding: 2rem; color: var(--text-hint);">Nada por aqui. Use o campo acima para começar.</p>'}
+                    `}).join('') || '<div style="grid-column: 1/-1; text-align:center; padding: 4rem; color: var(--text-hint);">Nada por aqui. Use o campo acima para começar.</div>'}
                 </div>
             </div>
         `;
@@ -453,29 +453,64 @@ const App = {
 
     renderFinances() {
         const f = this.state.data.finances;
-        const balanceDisplay = this.state.hideBalance ? '••••' : `R$ ${f.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        const balanceDisplay = this.state.hideBalance ? '••••' : `R$ ${f.balance.toLocaleString('pt-BR')}`;
+        
+        // Simulação Safe-to-Spend: Saldo - 40% (reserva)
+        const safeToSpend = f.balance * 0.6;
+        const safeDisplay = this.state.hideBalance ? '••••' : `R$ ${safeToSpend.toLocaleString('pt-BR')}`;
+
+        const categoryMap = {
+            'Food': { icon: '🍔', class: 'cat-food' },
+            'Transport': { icon: '🚗', class: 'cat-transport' },
+            'Subs': { icon: '📺', class: 'cat-subs' },
+            'Leisure': { icon: '🎮', class: 'cat-leisure' },
+            'Health': { icon: '🏥', class: 'cat-health' },
+            'Other': { icon: '💰', class: 'cat-other' }
+        };
+
         const html = `
             <div class="animate-fade-in">
                 <h1 class="display-lg">Finanças</h1>
-                <div class="card card-elevated">
-                    <p class="label-md">Patrimônio Total</p>
-                    <h2 style="font-size: 2.25rem;">${balanceDisplay}</h2>
-                </div>
-                <h3 style="margin-top: 2rem; margin-bottom: 1rem;">Histórico</h3>
-                ${f.transactions.map((t, index) => `
-                    <div style="display: flex; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <div>
-                            <p style="font-weight: 500;">${t.desc}</p>
-                            <p class="label-md" style="font-size: 0.6rem;">${t.date}</p>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <span style="font-weight: 600; color: ${t.val < 0 ? '#FF5252' : '#4CAF50'}">${t.val < 0 ? '-' : '+'} R$ ${Math.abs(t.val).toFixed(2)}</span>
-                            <button onclick="App.removeTransaction(${index})" style="background:none; border:none; color:#FF5252;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
-                        </div>
+                
+                <div class="finance-summary">
+                    <div class="stat-card">
+                        <p class="label-md">Patrimônio Total</p>
+                        <div class="stat-value">${balanceDisplay}</div>
                     </div>
-                `).join('') || '<p style="text-align:center; padding: 2rem;">Sem transações.</p>'}
+                    <div class="stat-card" style="border-left: 4px solid var(--primary);">
+                        <p class="label-md" style="color: var(--primary);">Disponível (Safe-to-Spend)</p>
+                        <div class="stat-value">${safeDisplay}</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1.25rem;">Transações Recentes</h3>
+                    <button class="btn btn-ghost" style="font-size: 0.8rem;" onclick="App.ui.alert('Exportação em breve')">Exportar PDF</button>
+                </div>
+
+                <div class="transaction-list">
+                    ${f.transactions.map((t, index) => {
+                        const cat = categoryMap[t.category] || categoryMap['Other'];
+                        return `
+                        <div class="transaction-item">
+                            <div class="transaction-info">
+                                <div class="category-icon ${cat.class}">${cat.icon}</div>
+                                <div>
+                                    <p style="font-weight: 600; font-size: 0.95rem;">${t.desc}</p>
+                                    <p class="label-md" style="font-size: 0.65rem;">${t.date} • ${t.category || 'Outros'}</p>
+                                </div>
+                            </div>
+                            <div style="text-align: right; display: flex; align-items: center; gap: 1rem;">
+                                <div style="font-weight: 700; color: ${t.val < 0 ? '#f87171' : '#34d399'}; font-size: 1rem;">
+                                    ${t.val < 0 ? '-' : '+'} R$ ${Math.abs(t.val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </div>
+                                <button onclick="App.removeTransaction(${index})" style="background:none; border:none; color:var(--text-hint); cursor: pointer; padding: 4px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `}).join('') || '<div style="text-align:center; padding: 4rem; background: var(--surface-low); border-radius: var(--radius-xl); color: var(--text-hint);">Nenhuma movimentação registrada.</div>'}
+                </div>
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
@@ -615,16 +650,48 @@ const App = {
                 this.render();
             }
         } else if (module === 'finances') {
-            const desc = await this.ui.prompt('Descrição da transação:');
-            if (desc) {
-                const valStr = await this.ui.prompt('Valor (use - para despesas):');
-                const val = parseFloat(valStr);
-                if (!isNaN(val)) {
-                    this.state.data.finances.transactions.unshift({ desc, val, date: new Date().toLocaleDateString('pt-BR') });
-                    this.state.data.finances.balance += val;
-                    await this.save(); 
-                    this.render();
-                }
+            const res = await this.ui.showModal({
+                title: 'Nova Transação',
+                body: `
+                    <div class="input-group">
+                        <label class="input-label">O que foi?</label>
+                        <input type="text" id="fin-desc" placeholder="Ex: Mercado">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="input-group">
+                            <label class="input-label">Valor (Positivo ou Negativo)</label>
+                            <input type="number" id="fin-val" step="0.01" placeholder="0.00">
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Categoria</label>
+                            <select id="fin-cat">
+                                <option value="Other">Outros</option>
+                                <option value="Food">Alimentação</option>
+                                <option value="Transport">Transporte</option>
+                                <option value="Subs">Assinaturas</option>
+                                <option value="Leisure">Lazer</option>
+                                <option value="Health">Saúde</option>
+                            </select>
+                        </div>
+                    </div>
+                `,
+                actions: [
+                    { text: 'Cancelar', resolve: null },
+                    { text: 'Salvar', primary: true, resolve: () => {
+                        return {
+                            desc: document.getElementById('fin-desc').value,
+                            val: parseFloat(document.getElementById('fin-val').value),
+                            category: document.getElementById('fin-cat').value
+                        };
+                    }}
+                ]
+            });
+
+            if (res && res.desc && !isNaN(res.val)) {
+                this.state.data.finances.transactions.unshift({ ...res, date: new Date().toLocaleDateString('pt-BR') });
+                this.state.data.finances.balance += res.val;
+                await this.save(); 
+                this.render();
             }
         } else if (module === 'notes') {
             const title = await this.ui.prompt('Título da nota:');
