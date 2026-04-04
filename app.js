@@ -163,6 +163,9 @@ const App = {
             const overlay = document.getElementById('modal-overlay');
             const container = document.getElementById('modal-container');
             
+            // Cancelar qualquer cleanup pendente
+            if (this._modalTimeout) clearTimeout(this._modalTimeout);
+
             return new Promise((resolve) => {
                 const html = `
                     <div class="modal-header">
@@ -180,15 +183,19 @@ const App = {
 
                 const cleanup = (value) => {
                     overlay.classList.remove('active');
-                    setTimeout(() => { container.innerHTML = ''; }, 300);
+                    this._modalTimeout = setTimeout(() => { 
+                        if (!overlay.classList.contains('active')) {
+                            container.innerHTML = ''; 
+                        }
+                    }, 300);
                     resolve(value);
                 };
 
                 container.querySelectorAll('.btn').forEach(btn => {
-                    btn.onclick = () => {
+                    btn.onclick = async () => {
                         const action = actions[btn.getAttribute('data-index')];
-                        const val = typeof action.resolve === 'function' ? action.resolve() : action.resolve;
-                        cleanup(val);
+                        const val = typeof action.resolve === 'function' ? await action.resolve() : action.resolve;
+                        if (val !== undefined) cleanup(val);
                     };
                 });
             });
@@ -815,11 +822,7 @@ const App = {
             });
 
             if (res && res.text) {
-                this.state.data.tasks.unshift({ ...res, done: false, createdAt: new Date().toISOString() });
-                await this.save(); 
-                this.render();
-            }
-        } else if (module === 'finances') {
+                this.state.data.tasks.unshift({ ...res, done: false, createdAt: new Date().toISOS        } else if (module === 'finances') {
             const categories = this.state.data.finances.categories || ['Alimentação', 'Transporte', 'Assinaturas', 'Lazer', 'Saúde'];
             const res = await this.ui.showModal({
                 title: 'Nova Transação',
@@ -828,10 +831,11 @@ const App = {
                         <label class="input-label">Descrição</label>
                         <input type="text" id="fin-desc" placeholder="Ex: Aluguel">
                     </div>
+                    
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <div class="input-group">
                             <label class="input-label">Valor (R$)</label>
-                            <input type="number" id="fin-val" step="0.01" placeholder="0,00" inputmode="decimal">
+                            <input type="number" id="fin-val" step="0.01" placeholder="0,00" readonly style="background:var(--surface-high);">
                         </div>
                         <div class="input-group">
                             <label class="input-label">Tipo</label>
@@ -841,31 +845,45 @@ const App = {
                             </select>
                         </div>
                     </div>
+
+                    <div id="numpad" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0;">
+                        ${[1,2,3,4,5,6,7,8,9,'.',0,'C'].map(n => `
+                            <button class="btn btn-ghost" style="padding: 15px; font-weight:800; font-size:1.2rem;" onclick="App.handleNumpad('${n}')">${n}</button>
+                        `).join('')}
+                    </div>
+
                     <div class="input-group">
                         <label class="input-label">Categoria</label>
-                        <select id="fin-cat">
+                        <select id="fin-cat" onchange="document.getElementById('new-cat-input').style.display = this.value === 'NEW' ? 'block' : 'none'">
                             ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
-                            <option value="NEW">+ Nova Categoria</option>
+                            <option value="NEW">+ Adicionar Nova...</option>
                         </select>
+                        <input type="text" id="new-cat-input" placeholder="Nova Categoria..." style="display:none; margin-top:10px;">
                     </div>
                 `,
                 actions: [
                     { text: 'Cancelar', resolve: null },
-                    { text: 'Confirmar', primary: true, resolve: async () => {
+                    { text: 'Confirmar', primary: true, resolve: () => {
                         const desc = document.getElementById('fin-desc').value;
                         const rawVal = parseFloat(document.getElementById('fin-val').value);
                         const type = document.getElementById('fin-type').value;
                         let cat = document.getElementById('fin-cat').value;
                         
                         if (cat === 'NEW') {
-                            const newCat = prompt('Nome da nova categoria:');
+                            const newCat = document.getElementById('new-cat-input').value;
                             if (newCat) {
                                 if(!this.state.data.finances.categories) this.state.data.finances.categories = categories;
                                 this.state.data.finances.categories.push(newCat);
                                 cat = newCat;
                             } else {
-                                return null;
+                                alert('Digite um nome para a categoria.');
+                                return undefined; // Não fecha o modal
                             }
+                        }
+
+                        if (!desc || isNaN(rawVal)) {
+                            alert('Preencha descrição e valor.');
+                            return undefined;
                         }
 
                         return {
@@ -877,9 +895,14 @@ const App = {
                 ]
             });
 
-            if (res && res.desc && !isNaN(res.val)) {
+            if (res) {
                 this.state.data.finances.transactions.unshift({ ...res, date: new Date().toLocaleDateString('pt-BR') });
                 this.state.data.finances.balance += res.val;
+                await this.save(); 
+                this.render();
+            }
+        }
+= res.val;
                 await this.save(); 
                 this.render();
             }
@@ -899,6 +922,14 @@ const App = {
                 this.render();
             }
         }
+    },
+
+    handleNumpad(key) {
+        const input = document.getElementById('fin-val');
+        if (!input) return;
+        if (key === 'C') input.value = '';
+        else if (key === '.' && input.value.includes('.')) return;
+        else input.value += key;
     },
 
     async toggleTask(index) {
