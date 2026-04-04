@@ -82,22 +82,87 @@ const App = {
             this.dom.fab.addEventListener('click', () => this.handleFabAction());
         }
 
-        const openSettings = () => {
-            const newName = prompt('Qual o seu nome?', this.state.userName);
-            if (newName) {
-                this.state.userName = newName;
-                this.save();
-                this.render();
-            }
-        };
+        if (btnSettings) btnSettings.onclick = () => this.openSettings();
+        if (btnSettingsSidebar) btnSettingsSidebar.onclick = () => this.openSettings();
+        if (btnSearch) btnSearch.onclick = () => this.ui.alert('Busca funcional em breve.');
+    },
 
-        const btnSettings = document.getElementById('btn-settings');
-        const btnSettingsSidebar = document.getElementById('btn-settings-sidebar');
-        const btnSearch = document.getElementById('btn-search');
+    ui: {
+        async alert(message) {
+            return this.showModal({
+                title: 'Aviso',
+                body: `<p>${message}</p>`,
+                actions: [{ text: 'OK', primary: true, resolve: true }]
+            });
+        },
+        async confirm(message) {
+            return this.showModal({
+                title: 'Confirmar',
+                body: `<p>${message}</p>`,
+                actions: [
+                    { text: 'Cancelar', resolve: false },
+                    { text: 'Confirmar', primary: true, resolve: true }
+                ]
+            });
+        },
+        async prompt(message, defaultValue = '') {
+            return this.showModal({
+                title: 'Entrada',
+                body: `
+                    <div class="input-group">
+                        <label class="input-label">${message}</label>
+                        <input type="text" id="prompt-input" value="${defaultValue}" autofocus>
+                    </div>
+                `,
+                actions: [
+                    { text: 'Cancelar', resolve: null },
+                    { text: 'OK', primary: true, resolve: () => document.getElementById('prompt-input').value }
+                ]
+            });
+        },
+        showModal({ title, body, actions }) {
+            const overlay = document.getElementById('modal-overlay');
+            const container = document.getElementById('modal-container');
+            
+            return new Promise((resolve) => {
+                const html = `
+                    <div class="modal-header">
+                        <h2 class="modal-title">${title}</h2>
+                    </div>
+                    <div class="modal-body">${body}</div>
+                    <div class="modal-footer">
+                        ${actions.map((a, i) => `
+                            <button class="btn ${a.primary ? 'btn-primary' : 'btn-ghost'}" data-index="${i}">${a.text}</button>
+                        `).join('')}
+                    </div>
+                `;
+                container.innerHTML = html;
+                overlay.classList.add('active');
 
-        if (btnSettings) btnSettings.onclick = openSettings;
-        if (btnSettingsSidebar) btnSettingsSidebar.onclick = openSettings;
-        if (btnSearch) btnSearch.onclick = () => alert('Busca funcional em breve.');
+                const cleanup = (value) => {
+                    overlay.classList.remove('active');
+                    setTimeout(() => { container.innerHTML = ''; }, 300);
+                    resolve(value);
+                };
+
+                container.querySelectorAll('.btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const action = actions[btn.getAttribute('data-index')];
+                        const val = typeof action.resolve === 'function' ? action.resolve() : action.resolve;
+                        cleanup(val);
+                    };
+                });
+            });
+        }
+    },
+
+    async openSettings() {
+        const newName = await this.ui.prompt('Qual o seu nome?', this.state.userName);
+        if (newName) {
+            this.state.userName = newName;
+            this.save();
+            this.render();
+        }
     },
 
     switchModule(moduleName) {
@@ -269,20 +334,55 @@ const App = {
         const html = `
             <div class="animate-fade-in">
                 <h1 class="display-lg">Tarefas</h1>
+                
+                <div class="task-quick-add">
+                    <input type="text" id="quick-task-input" placeholder="O que precisa ser feito agora?">
+                    <button class="btn btn-primary" onclick="App.addQuickTask()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                </div>
+
                 <div class="task-list">
-                    ${tasks.map((task, index) => `
-                        <div class="card" style="display: flex; align-items: center; gap: 1rem; padding: 1rem;">
-                            <div onclick="App.toggleTask(${index})" style="width: 20px; height: 20px; border: 2px solid var(--primary); border-radius: 50%; background: ${task.done ? 'var(--primary)' : 'transparent'};"></div>
-                            <span style="text-decoration: ${task.done ? 'line-through' : 'none'}; flex:1;">${task.text}</span>
-                            <button onclick="App.removeTask(${index})" style="background:none; border:none; color:#FF5252;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
+                    ${tasks.map((task, index) => {
+                        const tagClass = task.tag ? `tag-${task.tag.toLowerCase()}` : '';
+                        return `
+                        <div class="card" style="display: flex; gap: 1rem; padding: 1.25rem;">
+                            <div onclick="App.toggleTask(${index})" style="margin-top: 4px; width: 22px; height: 22px; border: 2px solid var(--primary); border-radius: 50%; background: ${task.done ? 'var(--primary)' : 'transparent'}; flex-shrink: 0; cursor: pointer;"></div>
+                            <div style="flex:1;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <span style="text-decoration: ${task.done ? 'line-through' : 'none'}; color: ${task.done ? 'var(--text-hint)' : 'var(--text-primary)'}; font-weight: 500;">${task.text}</span>
+                                    <button onclick="App.removeTask(${index})" style="background:none; border:none; color:var(--text-hint); cursor: pointer; padding: 4px;">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </button>
+                                </div>
+                                <div class="task-meta">
+                                    ${task.tag ? `<span class="task-tag ${tagClass}">${task.tag}</span>` : ''}
+                                    ${task.endDate ? `<span class="task-date-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg> ${task.endDate}</span>` : ''}
+                                </div>
+                            </div>
                         </div>
-                    `).join('') || '<p style="text-align:center; padding: 2rem;">Nada por aqui.</p>'}
+                    `}).join('') || '<p style="text-align:center; padding: 2rem; color: var(--text-hint);">Nada por aqui. Use o campo acima para começar.</p>'}
                 </div>
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
+        
+        // Listener para Enter no quick task
+        const input = document.getElementById('quick-task-input');
+        if (input) {
+            input.onkeypress = (e) => { if(e.key === 'Enter') this.addQuickTask(); };
+        }
+    },
+
+    addQuickTask() {
+        const input = document.getElementById('quick-task-input');
+        const text = input.value.trim();
+        if (text) {
+            this.state.data.tasks.unshift({ text, done: false, createdAt: new Date().toISOString() });
+            input.value = '';
+            this.save();
+            this.render();
+        }
     },
 
     renderFinances() {
@@ -396,33 +496,80 @@ const App = {
                 <h1 class="display-lg">Tempo</h1>
                 <div class="card card-elevated" style="text-align: center; padding: 3rem 1rem;">
                     <div style="font-size: 4rem; font-weight: 800; margin: 1.5rem 0;">25:00</div>
-                    <button class="fab" style="position: static;" onclick="alert('Foco iniciado')">Iniciar</button>
+                    <button class="fab" style="position: static;" onclick="App.ui.alert('Foco iniciado (Simulação)')">Iniciar</button>
                 </div>
             </div>
         `;
         this.dom.mainContent.innerHTML = html;
     },
 
-    handleFabAction() {
+    async handleFabAction() {
         const module = this.state.currentModule;
         if (module === 'tasks') {
-            const t = prompt('Nova tarefa:');
-            if (t) { this.state.data.tasks.unshift({ text: t, done: false }); this.save(); this.render(); }
-        } else if (module === 'finances') {
-            const desc = prompt('Descrição:');
-            const val = parseFloat(prompt('Valor:'));
-            if (desc && !isNaN(val)) {
-                this.state.data.finances.transactions.unshift({ desc, val, date: new Date().toLocaleDateString('pt-BR') });
-                this.state.data.finances.balance += val;
+            const res = await this.ui.showModal({
+                title: 'Nova Tarefa Detalhada',
+                body: `
+                    <div class="input-group">
+                        <label class="input-label">O que fazer?</label>
+                        <input type="text" id="task-text" placeholder="Ex: Estudar Java">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="input-group">
+                            <label class="input-label">Tipo</label>
+                            <select id="task-tag">
+                                <option value="">Nenhum</option>
+                                <option value="Work">Trabalho</option>
+                                <option value="Personal">Pessoal</option>
+                                <option value="Urgent">Urgente</option>
+                                <option value="Study">Estudo</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label class="input-label">Prazo</label>
+                            <input type="date" id="task-date">
+                        </div>
+                    </div>
+                `,
+                actions: [
+                    { text: 'Cancelar', resolve: null },
+                    { text: 'Criar Tarefa', primary: true, resolve: () => {
+                        return {
+                            text: document.getElementById('task-text').value,
+                            tag: document.getElementById('task-tag').value,
+                            endDate: document.getElementById('task-date').value
+                        };
+                    }}
+                ]
+            });
+
+            if (res && res.text) {
+                this.state.data.tasks.unshift({ ...res, done: false });
                 this.save(); this.render();
             }
+        } else if (module === 'finances') {
+            const desc = await this.ui.prompt('Descrição da transação:');
+            if (desc) {
+                const valStr = await this.ui.prompt('Valor (use - para despesas):');
+                const val = parseFloat(valStr);
+                if (!isNaN(val)) {
+                    this.state.data.finances.transactions.unshift({ desc, val, date: new Date().toLocaleDateString('pt-BR') });
+                    this.state.data.finances.balance += val;
+                    this.save(); this.render();
+                }
+            }
         } else if (module === 'notes') {
-            const title = prompt('Título:');
-            const text = prompt('Conteúdo:');
-            if (title) { this.state.data.notes.unshift({ title, text }); this.save(); this.render(); }
+            const title = await this.ui.prompt('Título da nota:');
+            if (title) {
+                const text = await this.ui.prompt('Conteúdo:');
+                this.state.data.notes.unshift({ title, text });
+                this.save(); this.render();
+            }
         } else if (module === 'goals') {
-            const title = prompt('Meta:');
-            if (title) { this.state.data.goals.unshift({ title, progress: 0 }); this.save(); this.render(); }
+            const title = await this.ui.prompt('Sua nova meta:');
+            if (title) {
+                this.state.data.goals.unshift({ title, progress: 0 });
+                this.save(); this.render();
+            }
         }
     },
 
@@ -432,12 +579,15 @@ const App = {
         this.render();
     },
 
-    removeTask(i) { if(confirm('Remover?')){ this.state.data.tasks.splice(i,1); this.save(); this.render(); } },
-    removeTransaction(i) { if(confirm('Remover?')){ const t=this.state.data.finances.transactions[i]; this.state.data.finances.balance-=t.val; this.state.data.finances.transactions.splice(i,1); this.save(); this.render(); } },
-    removeNote(i) { if(confirm('Remover?')){ this.state.data.notes.splice(i,1); this.save(); this.render(); } },
-    removeGoal(i) { if(confirm('Remover?')){ this.state.data.goals.splice(i,1); this.save(); this.render(); } },
-    removeIdea(i) { if(confirm('Remover?')){ this.state.data.ideas.splice(i,1); this.save(); this.render(); } },
-    updateGoalProgress(i) { const p = prompt('Progresso %', this.state.data.goals[i].progress); if(p!==null){ this.state.data.goals[i].progress = Math.min(100, Math.max(0, parseInt(p))); this.save(); this.render(); } }
+    async removeTask(i) { if(await this.ui.confirm('Deseja remover esta tarefa?')){ this.state.data.tasks.splice(i,1); this.save(); this.render(); } },
+    async removeTransaction(i) { if(await this.ui.confirm('Remover transação?')){ const t=this.state.data.finances.transactions[i]; this.state.data.finances.balance-=t.val; this.state.data.finances.transactions.splice(i,1); this.save(); this.render(); } },
+    async removeNote(i) { if(await this.ui.confirm('Excluir nota permanentemente?')){ this.state.data.notes.splice(i,1); this.save(); this.render(); } },
+    async removeGoal(i) { if(await this.ui.confirm('Desistir desta meta?')){ this.state.data.goals.splice(i,1); this.save(); this.render(); } },
+    async removeIdea(i) { if(await this.ui.confirm('Remover ideia?')){ this.state.data.ideas.splice(i,1); this.save(); this.render(); } },
+    async updateGoalProgress(i) { 
+        const p = await this.ui.prompt('Progresso atual (%)', this.state.data.goals[i].progress); 
+        if(p!==null){ this.state.data.goals[i].progress = Math.min(100, Math.max(0, parseInt(p))); this.save(); this.render(); } 
+    }
 };
 
 // Auto-inicializar

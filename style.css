@@ -20,10 +20,11 @@
     --radius-lg: 1rem;
     --radius-xl: 1.5rem;
     
-    --glass-bg: rgba(31, 31, 31, 0.7);
-    --glass-blur: blur(20px);
+    --glass-bg: rgba(19, 19, 19, 0.85); /* Slightly darker glass for better contrast */
+    --glass-blur: blur(25px);
     
-    --transition-smooth: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: 400ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
     
     --safe-area-top: env(safe-area-inset-top, 0px);
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -234,6 +235,166 @@ h1, h2, h3, .logo {
     color: var(--text-primary);
 }
 
+/* --- New Modal System --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--transition-smooth);
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: var(--surface-low);
+    width: 100%;
+    max-width: 500px;
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transform: translateY(20px) scale(0.95);
+    transition: var(--transition-bounce);
+    position: relative;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+
+.modal-overlay.active .modal-content {
+    transform: translateY(0) scale(1);
+}
+
+.modal-header {
+    margin-bottom: 1.5rem;
+}
+
+.modal-title {
+    font-size: 1.5rem;
+    color: var(--primary);
+}
+
+.modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.modal-footer {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+/* --- Form Elements --- */
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.input-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-hint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+input, textarea, select {
+    background: var(--surface-container);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    padding: 0.875rem 1rem;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 1rem;
+    transition: var(--transition-smooth);
+    outline: none;
+    width: 100%;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: var(--primary);
+    background: var(--surface-high);
+    box-shadow: 0 0 0 4px rgba(223, 183, 255, 0.1);
+}
+
+.btn {
+    padding: 0.875rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-bounce);
+    border: none;
+    font-size: 1rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    color: var(--on-primary);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.btn:active {
+    transform: scale(0.95);
+}
+
+/* --- Tasks 2.0 Refinements --- */
+.task-quick-add {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.task-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.tag-work { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+.tag-personal { background: rgba(16, 185, 129, 0.1); color: #34d399; }
+.tag-urgent { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+.tag-study { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+
+.task-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: var(--text-hint);
+}
+
+.task-date-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-container);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
 .animate-fade-in {
     animation: fadeIn 0.4s ease-out forwards;
 }
@@ -363,12 +524,23 @@ h1, h2, h3, .logo {
 
     .dashboard-widget {
         grid-template-columns: repeat(4, 1fr) !important;
+        gap: 1.5rem !important;
     }
 
     .card-grid-2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 1.5rem;
+        gap: 2rem;
+    }
+
+    .display-lg {
+        font-size: 3.5rem;
+    }
+
+    .task-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 1rem;
     }
 }
 
