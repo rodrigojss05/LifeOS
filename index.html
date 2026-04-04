@@ -24,12 +24,6 @@
 </head>
 <body class="safe-area-inset">
     <div id="app">
-        <!-- Sync Status -->
-        <div class="sync-container">
-            <div id="sync-indicator" class="sync-dot offline"></div>
-            <span>Cloud Sync</span>
-        </div>
-
         <!-- Sidebar for Desktop -->
         <aside class="main-sidebar">
             <div class="logo">Life OS</div>
@@ -132,7 +126,13 @@
         </div>
     </div>
 
-    <!-- Modal System -->
+    <!-- Sync Status Indicator -->
+    <div class="sync-container">
+        <div id="sync-indicator" class="sync-dot offline"></div>
+        <span>Cloud Sync</span>
+    </div>
+
+    <!-- Modais Dynamicos -->
     <div id="modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <div id="modal-container"></div>
