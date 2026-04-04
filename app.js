@@ -11,6 +11,7 @@ function getSupabase() {
 
 const App = {
     state: {
+        userId: null,
         currentModule: 'dashboard',
         userName: 'Rodrigo',
         hideBalance: false,
@@ -24,8 +25,15 @@ const App = {
         }
     },
 
+    generateUUID() {
+        const id = 'user_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+        localStorage.setItem('lifeos_user_id', id);
+        return id;
+    },
+
     async init() {
         console.log('Iniciando Life OS...');
+        this.state.userId = localStorage.getItem('lifeos_user_id') || this.generateUUID();
         try {
             this.cacheDOM();
             this.bindEvents();
@@ -35,7 +43,7 @@ const App = {
             
             this.checkFirstRun();
             this.render();
-            console.log('Life OS pronto.');
+            console.log('Life OS pronto (User:', this.state.userId, ')');
         } catch (error) {
             console.error('Erro crítico na inicialização:', error);
             // Tentar renderizar o que for possível
@@ -81,6 +89,10 @@ const App = {
         if (this.dom.fab) {
             this.dom.fab.addEventListener('click', () => this.handleFabAction());
         }
+
+        const btnSettings = document.getElementById('btn-settings');
+        const btnSettingsSidebar = document.getElementById('btn-settings-sidebar');
+        const btnSearch = document.getElementById('btn-search');
 
         if (btnSettings) btnSettings.onclick = () => this.openSettings();
         if (btnSettingsSidebar) btnSettingsSidebar.onclick = () => this.openSettings();
@@ -181,11 +193,11 @@ const App = {
     async load() {
         const client = getSupabase();
         if (client) {
-            console.log('Buscando dados na nuvem...');
-            const { data, error } = await client.from('os_state').select('data').eq('id', 1).single();
+            console.log('Sincronizando com a nuvem (ID:', this.state.userId, ')...');
+            const { data, error } = await client.from('os_state').select('data').eq('user_id', this.state.userId).single();
             
-            if (error) {
-                console.warn('Erro ao buscar na nuvem, usando local:', error.message);
+            if (error && error.code !== 'PGRST116') { // PGRST116 é "não encontrado"
+                console.warn('Erro na nuvem, usando local:', error.message);
                 this.loadLocal();
                 return;
             }
@@ -195,12 +207,13 @@ const App = {
                 this.state.data = s.data || this.state.data;
                 this.state.userName = s.userName || this.state.userName;
                 this.state.hideBalance = s.hideBalance || false;
-                console.log('Dados sincronizados da nuvem com sucesso.');
+                console.log('Dados sincronizados com sucesso.');
             } else {
+                console.log('Primeiro acesso na nuvem para este ID.');
                 this.loadLocal();
             }
         } else {
-            console.warn('Supabase não detectado, usando LocalStorage.');
+            console.warn('Supabase Offline, usando LocalStorage.');
             this.loadLocal();
         }
     },
@@ -231,15 +244,21 @@ const App = {
         
         const client = getSupabase();
         if (client) {
-            const { error } = await client.from('os_state').upsert({ id: 1, data: payload, updated_at: new Date() });
-            if (error) console.error('Erro de push nuvem:', error.message);
-            else console.log('Nuvem atualizada.');
+            // Usamos user_id como identificador único
+            const { error } = await client.from('os_state').upsert({ 
+                user_id: this.state.userId, 
+                data: payload, 
+                updated_at: new Date() 
+            }, { onConflict: 'user_id' });
+            
+            if (error) console.error('Erro de sincronização nuvem:', error.message);
+            else console.log('Nuvem atualizada (', this.state.userId, ')');
         }
     },
 
-    toggleBalance() {
+    async toggleBalance() {
         this.state.hideBalance = !this.state.hideBalance;
-        this.save();
+        await this.save();
         this.render();
     },
 
@@ -322,9 +341,9 @@ const App = {
         this.dom.mainContent.innerHTML = html;
     },
 
-    quickAction(type) {
+    async quickAction(type) {
         this.state.currentModule = type;
-        this.handleFabAction();
+        await this.handleFabAction();
         this.state.currentModule = 'dashboard';
         this.render();
     },
@@ -374,13 +393,13 @@ const App = {
         }
     },
 
-    addQuickTask() {
+    async addQuickTask() {
         const input = document.getElementById('quick-task-input');
         const text = input.value.trim();
         if (text) {
             this.state.data.tasks.unshift({ text, done: false, createdAt: new Date().toISOString() });
             input.value = '';
-            this.save();
+            await this.save();
             this.render();
         }
     },
@@ -438,13 +457,14 @@ const App = {
         this.dom.mainContent.innerHTML = html;
     },
 
-    openNote(index) {
+    async openNote(index) {
         const note = this.state.data.notes[index];
-        const newTitle = prompt('Título:', note.title);
-        const newText = prompt('Conteúdo:', note.text);
+        const newTitle = await this.ui.prompt('Título:', note.title);
+        const newText = await this.ui.prompt('Conteúdo:', note.text);
         if (newTitle !== null) note.title = newTitle;
         if (newText !== null) note.text = newText;
-        this.save(); this.render();
+        await this.save(); 
+        this.render();
     },
 
     renderGoals() {
@@ -544,7 +564,8 @@ const App = {
 
             if (res && res.text) {
                 this.state.data.tasks.unshift({ ...res, done: false });
-                this.save(); this.render();
+                await this.save(); 
+                this.render();
             }
         } else if (module === 'finances') {
             const desc = await this.ui.prompt('Descrição da transação:');
@@ -554,7 +575,8 @@ const App = {
                 if (!isNaN(val)) {
                     this.state.data.finances.transactions.unshift({ desc, val, date: new Date().toLocaleDateString('pt-BR') });
                     this.state.data.finances.balance += val;
-                    this.save(); this.render();
+                    await this.save(); 
+                    this.render();
                 }
             }
         } else if (module === 'notes') {
@@ -562,31 +584,33 @@ const App = {
             if (title) {
                 const text = await this.ui.prompt('Conteúdo:');
                 this.state.data.notes.unshift({ title, text });
-                this.save(); this.render();
+                await this.save(); 
+                this.render();
             }
         } else if (module === 'goals') {
             const title = await this.ui.prompt('Sua nova meta:');
             if (title) {
                 this.state.data.goals.unshift({ title, progress: 0 });
-                this.save(); this.render();
+                await this.save(); 
+                this.render();
             }
         }
     },
 
-    toggleTask(index) {
+    async toggleTask(index) {
         this.state.data.tasks[index].done = !this.state.data.tasks[index].done;
-        this.save();
+        await this.save();
         this.render();
     },
 
-    async removeTask(i) { if(await this.ui.confirm('Deseja remover esta tarefa?')){ this.state.data.tasks.splice(i,1); this.save(); this.render(); } },
-    async removeTransaction(i) { if(await this.ui.confirm('Remover transação?')){ const t=this.state.data.finances.transactions[i]; this.state.data.finances.balance-=t.val; this.state.data.finances.transactions.splice(i,1); this.save(); this.render(); } },
-    async removeNote(i) { if(await this.ui.confirm('Excluir nota permanentemente?')){ this.state.data.notes.splice(i,1); this.save(); this.render(); } },
-    async removeGoal(i) { if(await this.ui.confirm('Desistir desta meta?')){ this.state.data.goals.splice(i,1); this.save(); this.render(); } },
-    async removeIdea(i) { if(await this.ui.confirm('Remover ideia?')){ this.state.data.ideas.splice(i,1); this.save(); this.render(); } },
+    async removeTask(i) { if(await this.ui.confirm('Deseja remover esta tarefa?')){ this.state.data.tasks.splice(i,1); await this.save(); this.render(); } },
+    async removeTransaction(i) { if(await this.ui.confirm('Remover transação?')){ const t=this.state.data.finances.transactions[i]; this.state.data.finances.balance-=t.val; this.state.data.finances.transactions.splice(i,1); await this.save(); this.render(); } },
+    async removeNote(i) { if(await this.ui.confirm('Excluir nota permanentemente?')){ this.state.data.notes.splice(i,1); await this.save(); this.render(); } },
+    async removeGoal(i) { if(await this.ui.confirm('Desistir desta meta?')){ this.state.data.goals.splice(i,1); await this.save(); this.render(); } },
+    async removeIdea(i) { if(await this.ui.confirm('Remover ideia?')){ this.state.data.ideas.splice(i,1); await this.save(); this.render(); } },
     async updateGoalProgress(i) { 
         const p = await this.ui.prompt('Progresso atual (%)', this.state.data.goals[i].progress); 
-        if(p!==null){ this.state.data.goals[i].progress = Math.min(100, Math.max(0, parseInt(p))); this.save(); this.render(); } 
+        if(p!==null){ this.state.data.goals[i].progress = Math.min(100, Math.max(0, parseInt(p))); await this.save(); this.render(); } 
     }
 };
 
